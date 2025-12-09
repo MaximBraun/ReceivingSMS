@@ -16,13 +16,10 @@ class Settings(BaseSettings):
     db_password: str
     db_name: str
 
-    webhook_secret: str
-
-    # OnlineSIM
-    onlinesim_api_base_url: str = "https://onlinesim.io"
-    onlinesim_api_key: str  # API key из профиля (см. доку auth)
-    # на будущее под OAuth2:
-    onlinesim_oauth_access_token: str | None = None
+    # Twilio
+    twilio_account_sid: str
+    twilio_auth_token: str
+    twilio_phone_number: str | None = None  # опционально, для отправки SMS
 
     @property
     def database_url(self) -> str:

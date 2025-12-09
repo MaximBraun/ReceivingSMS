@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db_session
 from app.models.sms import SMS
-from app.schemas.sms import OnlineSimNewSmsPayload
+from app.schemas.sms import TwilioWebhookPayload
 
 logger = logging.getLogger("app.sms_service")
 
@@ -17,7 +17,7 @@ class SmsService:
 
     async def save_incoming_sms(
         self,
-        payload: OnlineSimNewSmsPayload,
+        payload: TwilioWebhookPayload,
         raw_payload: dict[str, Any],
     ) -> SMS:
         logger.info(

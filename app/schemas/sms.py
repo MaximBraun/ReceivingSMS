@@ -4,39 +4,48 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 
-class OnlineSimNewSmsPayload(BaseModel):
+class TwilioWebhookPayload(BaseModel):
+    """
+    Payload от Twilio webhook (form-data формат).
+    Twilio отправляет данные как application/x-www-form-urlencoded.
+    """
     model_config = ConfigDict(extra="allow")
 
-    user_id: str
-    country_code: str
-    number: str  # номер, на который пришло СМС (наш to_number)
-    sender: str  # имя/номер отправителя (наш from_number)
-    message: str  # текст СМС
-    time_start: str
-    time_left: str
-    operation_id: str
-    webhook_type: str
-    code: str  # SMS ID у OnlineSIM
+    # Основные поля из Twilio webhook
+    MessageSid: str  # уникальный ID сообщения (наш provider_message_id)
+    AccountSid: str
+    From: str  # номер отправителя (наш from_number)
+    To: str  # номер получателя (наш Twilio номер, to_number)
+    Body: str  # текст сообщения (наш text)
+    
+    # Дополнительные поля (опциональные, но часто присутствуют)
+    NumMedia: str = "0"  # количество медиа-файлов
+    MessageStatus: str | None = None
+    SmsStatus: str | None = None
+    SmsSid: str | None = None
+    SmsMessageSid: str | None = None
 
-    # вспомогательные свойства, если удобно
+    # Вспомогательные свойства для совместимости с сервисом
     @property
     def provider_message_id(self) -> str:
-        return self.code
+        return self.MessageSid
 
     @property
     def to_number(self) -> str:
-        return self.number
+        return self.To
 
     @property
     def from_number(self) -> str:
-        return self.sender
+        return self.From
 
     @property
     def text(self) -> str:
-        return self.message
+        return self.Body
 
 
 class SmsInDB(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     provider_message_id: str
     from_number: str
@@ -44,12 +53,11 @@ class SmsInDB(BaseModel):
     text: str
     received_at: datetime
     status: str
-
-    class Config:
-        from_attributes = True
 
 
 class SmsListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     provider_message_id: str
     from_number: str
@@ -57,9 +65,6 @@ class SmsListItem(BaseModel):
     text: str
     received_at: datetime
     status: str
-
-    class Config:
-        from_attributes = True
 
 
 class SmsListResponse(BaseModel):

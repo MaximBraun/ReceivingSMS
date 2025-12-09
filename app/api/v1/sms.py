@@ -1,9 +1,11 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request, Form
+from typing import Annotated
 
 from app.core.config import get_settings, Settings
+from app.core.twilio_auth import validate_twilio_signature
 from app.schemas.sms import (
-    OnlineSimNewSmsPayload,
+    TwilioWebhookPayload,
     SmsInDB,
     SmsListItem,
     SmsListResponse,
@@ -17,35 +19,75 @@ logger = logging.getLogger("app.api.sms")
 router = APIRouter(prefix="/api/v1", tags=["sms"])
 
 
-def verify_webhook_token(
-    token: str = Query(..., alias="token"),
-    settings: Settings = Depends(get_settings),
-) -> None:
-    if token != settings.webhook_secret:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid webhook token",
-        )
-
-
 @router.post(
-    "/webhooks/onlinesim/new-sms",
+    "/webhooks/twilio/sms",
     response_model=SmsInDB,
     status_code=status.HTTP_201_CREATED,
 )
-async def onlinesim_new_sms_webhook(
-    payload: OnlineSimNewSmsPayload,
-    _: None = Depends(verify_webhook_token),
+async def twilio_sms_webhook(
+    request: Request,
+    MessageSid: Annotated[str, Form()],
+    AccountSid: Annotated[str, Form()],
+    From: Annotated[str, Form()],
+    To: Annotated[str, Form()],
+    Body: Annotated[str, Form()],
+    NumMedia: Annotated[str, Form()] = "0",
+    MessageStatus: Annotated[str | None, Form()] = None,
+    SmsStatus: Annotated[str | None, Form()] = None,
+    SmsSid: Annotated[str | None, Form()] = None,
+    SmsMessageSid: Annotated[str | None, Form()] = None,
+    settings: Settings = Depends(get_settings),
     sms_service: SmsService = Depends(get_sms_service),
 ) -> SmsInDB:
+    """
+    Webhook endpoint для приема входящих SMS от Twilio.
+    
+    Twilio отправляет данные в формате application/x-www-form-urlencoded.
+    """
+    # Собираем все form-параметры для валидации подписи
+    form_data = {
+        "MessageSid": MessageSid,
+        "AccountSid": AccountSid,
+        "From": From,
+        "To": To,
+        "Body": Body,
+        "NumMedia": NumMedia,
+    }
+    if MessageStatus:
+        form_data["MessageStatus"] = MessageStatus
+    if SmsStatus:
+        form_data["SmsStatus"] = SmsStatus
+    if SmsSid:
+        form_data["SmsSid"] = SmsSid
+    if SmsMessageSid:
+        form_data["SmsMessageSid"] = SmsMessageSid
+    
+    # Валидируем подпись Twilio
+    await validate_twilio_signature(request, form_data, settings)
+    
+    # Создаем payload объект
+    payload = TwilioWebhookPayload(
+        MessageSid=MessageSid,
+        AccountSid=AccountSid,
+        From=From,
+        To=To,
+        Body=Body,
+        NumMedia=NumMedia,
+        MessageStatus=MessageStatus,
+        SmsStatus=SmsStatus,
+        SmsSid=SmsSid,
+        SmsMessageSid=SmsMessageSid,
+    )
+    
     logger.info(
-        "Received OnlineSIM webhook",
+        "Received Twilio SMS webhook",
         extra={
-            "operation_id": payload.operation_id,
-            "number": payload.number,
-            "sender": payload.sender,
+            "message_sid": payload.MessageSid,
+            "from": payload.From,
+            "to": payload.To,
         },
     )
+    
     sms = await sms_service.save_incoming_sms(
         payload=payload,
         raw_payload=payload.model_dump(),
