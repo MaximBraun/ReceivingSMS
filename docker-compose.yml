@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16
+    container_name: receiving_sms_db
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    #ports:
+      #- "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    container_name: receiving_sms_api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV}
+      APP_DEBUG: ${APP_DEBUG}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      ONLINESIM_API_BASE_URL: ${ONLINESIM_API_BASE_URL}
+      ONLINESIM_API_KEY: ${ONLINESIM_API_KEY}
+    ports:
+      - "8000:8000"
+
+volumes:
+  db_data:
